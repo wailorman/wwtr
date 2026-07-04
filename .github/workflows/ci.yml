@@ -37,7 +37,7 @@ jobs:
             echo "::error::Coverage ${cov}% is below the 95% gate"
             exit 1
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: cover-out
           path: cover.out
