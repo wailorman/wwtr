@@ -68,9 +68,15 @@ func (c *Config) HookStage(cmd, stage string) []Hook {
 
 // PathSpec is a single template/copy/symlink entry. After normalisation To is
 // always populated: a YAML entry with only `from:` gets To = From.
+//
+// Content is honoured only on `template:` entries — when set, the body is the
+// template text itself and `from:` must be empty (the file-based and inline
+// forms are mutually exclusive). `copy:` and `symlink:` ignore Content and
+// validation rejects it.
 type PathSpec struct {
-	From string `yaml:"from"`
-	To   string `yaml:"to"`
+	From    string `yaml:"from"`
+	To      string `yaml:"to"`
+	Content string `yaml:"content"`
 }
 
 // HookStage groups the pre and post hook lists of a single command.
@@ -178,7 +184,7 @@ func Validate(c *Config) error {
 		errs = append(errs, fmt.Errorf("%w (got %d, want %d)", ErrInvalidVersion, c.Version, currentVersion))
 	}
 	errs = append(errs, validateVars(c.vars)...)
-	errs = append(errs, validatePaths("template", c.Template)...)
+	errs = append(errs, validateTemplate(c.Template)...)
 	errs = append(errs, validatePaths("copy", c.Copy)...)
 	errs = append(errs, validatePaths("symlink", c.Symlink)...)
 	errs = append(errs, validateHooks(c.Hooks)...)
@@ -207,6 +213,28 @@ func validatePaths(kind string, ps []PathSpec) []error {
 	for i, p := range ps {
 		if p.From == "" {
 			errs = append(errs, fmt.Errorf("%s[%d]: from is required", kind, i))
+		}
+		if p.Content != "" {
+			errs = append(errs, fmt.Errorf("%s[%d]: content is not supported on %s entries", kind, i, kind))
+		}
+	}
+	return errs
+}
+
+// validateTemplate enforces the inline-content contract for `template:`
+// entries: exactly one of `from:` / `content:` is set, and `to:` is required
+// when content is given (the file-based form defaults To to From, but inline
+// content has no From to default from).
+func validateTemplate(ps []PathSpec) []error {
+	var errs []error
+	for i, p := range ps {
+		switch {
+		case p.From == "" && p.Content == "":
+			errs = append(errs, fmt.Errorf("template[%d]: from or content is required", i))
+		case p.From != "" && p.Content != "":
+			errs = append(errs, fmt.Errorf("template[%d]: from and content are mutually exclusive", i))
+		case p.Content != "" && p.To == "":
+			errs = append(errs, fmt.Errorf("template[%d]: to is required with content", i))
 		}
 	}
 	return errs

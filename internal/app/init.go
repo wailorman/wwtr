@@ -79,7 +79,7 @@ func RunInit(ctx context.Context, rc *runcontext.RunContext) error {
 func buildOps(cfg *config.Config) []files.Op {
 	var ops []files.Op
 	for _, p := range cfg.Template {
-		ops = append(ops, files.Op{Kind: files.OpTemplate, From: p.From, To: p.To})
+		ops = append(ops, files.Op{Kind: files.OpTemplate, From: p.From, To: p.To, Content: p.Content})
 	}
 	for _, p := range cfg.Copy {
 		ops = append(ops, files.Op{Kind: files.OpCopy, From: p.From, To: p.To})

@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/wailorman/wwtr/internal/di"
@@ -115,6 +116,106 @@ func TestApply_FreshTemplate(t *testing.T) {
 	}
 	if got := string(readOrFail(t, fs, "/current/out.txt")); got != "hello world" {
 		t.Fatalf("rendered = %q, want %q", got, "hello world")
+	}
+}
+
+func TestApply_InlineTemplateContent_RendersWithoutFile(t *testing.T) {
+	fs := fakes.NewFakeFS()
+	p := &fakes.FakePrompter{}
+
+	res, err := files.Apply(context.Background(), baseOpts(fs, p), []files.Op{
+		{Kind: files.OpTemplate, To: "config/database.yml", Content: "adapter: pg\ndb: {{ .Vars.name }}\n"},
+	})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if len(res) != 1 || res[0].Action != files.ActionWrote {
+		t.Fatalf("got %+v, want one Wrote", res)
+	}
+	got := string(readOrFail(t, fs, "/current/config/database.yml"))
+	want := "adapter: pg\ndb: world\n"
+	if got != want {
+		t.Fatalf("rendered = %q, want %q", got, want)
+	}
+	// Sanity: no main-side file was ever consulted.
+	if fs.Exists("/main/config/database.yml") {
+		t.Fatalf("inline template should not touch MainPath")
+	}
+}
+
+func TestApply_InlineTemplateContent_StaticNoDirectives(t *testing.T) {
+	fs := fakes.NewFakeFS()
+	p := &fakes.FakePrompter{}
+
+	res, err := files.Apply(context.Background(), baseOpts(fs, p), []files.Op{
+		{Kind: files.OpTemplate, To: "static.txt", Content: "plain content, no directives"},
+	})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if res[0].Action != files.ActionWrote {
+		t.Fatalf("action = %v, want Wrote", res[0].Action)
+	}
+	if got := string(readOrFail(t, fs, "/current/static.txt")); got != "plain content, no directives" {
+		t.Fatalf("content = %q", got)
+	}
+}
+
+func TestApply_InlineTemplateContent_ErrorDoesNotMentionMainPath(t *testing.T) {
+	fs := fakes.NewFakeFS()
+	p := &fakes.FakePrompter{}
+
+	_, err := files.Apply(context.Background(), baseOpts(fs, p), []files.Op{
+		{Kind: files.OpTemplate, To: "out", Content: "{{ .Vars.missing }}"},
+	})
+	if err == nil {
+		t.Fatal("want render error for missing var")
+	}
+	// The message must point at the render stage, not pretend it tried to
+	// ReadFile from MainPath (inline templates never touch the FS).
+	if strings.Contains(err.Error(), "/main") {
+		t.Fatalf("error should not reference MainPath: %v", err)
+	}
+	if !strings.Contains(err.Error(), "render template") {
+		t.Fatalf("error should come from render stage: %v", err)
+	}
+}
+
+func TestClean_InlineTemplateContent_RerendersForComparison(t *testing.T) {
+	fs := fakes.NewFakeFS()
+	seed(t, fs, "/current/out", "v=world") // matches rendered inline output
+	p := &fakes.FakePrompter{}
+
+	res, err := files.Clean(context.Background(), baseOpts(fs, p), []files.Op{
+		{Kind: files.OpTemplate, To: "out", Content: "v={{ .Vars.name }}"},
+	})
+	if err != nil {
+		t.Fatalf("Clean: %v", err)
+	}
+	if res[0].Action != files.ActionWrote {
+		t.Fatalf("action = %v, want Wrote (removed)", res[0].Action)
+	}
+	if fs.Exists("/current/out") {
+		t.Fatalf("expected removed")
+	}
+}
+
+func TestClean_InlineTemplateContent_ModifiedFallsBackToPrompt(t *testing.T) {
+	fs := fakes.NewFakeFS()
+	seed(t, fs, "/current/out", "user-edited")
+	p := &fakes.FakePrompter{Decisions: []di.Decision{di.DecisionNo}}
+
+	res, err := files.Clean(context.Background(), baseOpts(fs, p), []files.Op{
+		{Kind: files.OpTemplate, To: "out", Content: "v={{ .Vars.name }}"},
+	})
+	if err != nil {
+		t.Fatalf("Clean: %v", err)
+	}
+	if res[0].Action != files.ActionSkipped {
+		t.Fatalf("action = %v, want Skipped", res[0].Action)
+	}
+	if got := string(readOrFail(t, fs, "/current/out")); got != "user-edited" {
+		t.Fatalf("content changed: %q", got)
 	}
 }
 

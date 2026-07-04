@@ -52,10 +52,15 @@ func (k OpKind) String() string {
 // Op is a single normalised template/copy/symlink entry. From is relative to
 // the main worktree; To is relative to the current worktree. An empty To
 // defaults to From at apply time (matches config.PathSpec normalisation).
+//
+// Content carries inline template text from the `content:` YAML field. When
+// set, From is empty and applyTemplate renders Content directly instead of
+// reading From from the filesystem.
 type Op struct {
-	Kind OpKind
-	From string
-	To   string
+	Kind    OpKind
+	From    string
+	To      string
+	Content string
 }
 
 // Action is the per-op outcome reported back to the caller.
@@ -177,20 +182,36 @@ func (r *runner) applyOne(op Op) (Result, error) {
 }
 
 func (r *runner) applyTemplate(op Op, to string) (Result, error) {
-	fromPath := filepath.Join(r.opts.MainPath, op.From)
-	raw, err := r.opts.FS.ReadFile(fromPath)
+	raw, name, err := r.templateSource(op)
 	if err != nil {
-		return Result{}, fmt.Errorf("files: read template %s: %w", fromPath, err)
+		return Result{}, err
 	}
-	rendered, err := template.Render(op.From, string(raw), template.Data{
+	rendered, err := template.Render(name, raw, template.Data{
 		BuiltinVars: r.opts.Builtin,
 		Vars:        r.opts.UserVars,
 	})
 	if err != nil {
-		return Result{}, fmt.Errorf("files: render template %s: %w", fromPath, err)
+		return Result{}, fmt.Errorf("files: render template %s: %w", name, err)
 	}
 	toPath := filepath.Join(r.opts.CurrentPath, to)
 	return r.writeContent(op, toPath, rendered)
+}
+
+// templateSource returns the raw template body and the name to use in error
+// messages. Inline Content (when set) bypasses the filesystem; the file-based
+// form reads MainPath/From as before. The name tracks From for file-based
+// templates (the source path is what the user needs to debug) and To for
+// inline ones (From is empty there).
+func (r *runner) templateSource(op Op) (string, string, error) {
+	if op.Content != "" {
+		return op.Content, op.To, nil
+	}
+	fromPath := filepath.Join(r.opts.MainPath, op.From)
+	data, err := r.opts.FS.ReadFile(fromPath)
+	if err != nil {
+		return "", "", fmt.Errorf("files: read template %s: %w", fromPath, err)
+	}
+	return string(data), op.From, nil
 }
 
 func (r *runner) applyCopy(op Op, to string) (Result, error) {
@@ -378,15 +399,14 @@ func (r *runner) remove(op Op, toPath, reason string) (Result, error) {
 // expectedContent returns what Apply would write for a copy/template op, or
 // (nil, false) if it cannot be determined (main/from missing or render error).
 func (r *runner) expectedContent(op Op) ([]byte, bool) {
-	fromPath := filepath.Join(r.opts.MainPath, op.From)
-	raw, err := r.opts.FS.ReadFile(fromPath)
+	raw, name, err := r.templateSource(op)
 	if err != nil {
 		return nil, false
 	}
 	if op.Kind != OpTemplate {
-		return raw, true
+		return []byte(raw), true
 	}
-	rendered, err := template.Render(op.From, string(raw), template.Data{
+	rendered, err := template.Render(name, raw, template.Data{
 		BuiltinVars: r.opts.Builtin,
 		Vars:        r.opts.UserVars,
 	})

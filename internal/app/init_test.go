@@ -409,6 +409,26 @@ symlink:
 	}
 }
 
+func TestBuildOps_TemplateContentPropagated(t *testing.T) {
+	t.Parallel()
+	cfg := mustParseConfig(t, `version: 1
+template:
+  - to: out.txt
+    content: |
+      hello {{ .Vars.name }}
+`)
+	ops := buildOps(cfg)
+	if len(ops) != 1 || ops[0].Kind != files.OpTemplate {
+		t.Fatalf("ops = %+v, want one OpTemplate", ops)
+	}
+	if ops[0].Content == "" {
+		t.Errorf("Content not propagated: %+v", ops[0])
+	}
+	if ops[0].From != "" {
+		t.Errorf("From=%q want empty for inline template", ops[0].From)
+	}
+}
+
 // mustParseConfig parses body via the real config.Load against a fresh FakeFS,
 // useful for tests that need a *config.Config without running discovery.
 func mustParseConfig(t *testing.T, body string) *config.Config {

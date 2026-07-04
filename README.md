@@ -209,13 +209,27 @@ wwtr init --base-port 9000     # → http_port=9000, grpc_port=9001
 |---|---|
 | `version: 1` | schema version (required) |
 | `vars:` | named variables, resolved in declaration order |
-| `template:` | list of `{from, to}` files rendered through Sprig |
+| `template:` | list of `{from, to}` or `{to, content}` entries rendered through Sprig |
 | `copy:` | list of `{from, to}` files copied verbatim |
 | `symlink:` | list of `{from, to}` files symlinked from the main worktree |
 | `hooks:` | `pre` / `post` hook lists per command |
 
-`to:` is optional — an entry with only `from:` lands at the same relative
-path. All paths are relative to the worktree root.
+`to:` is optional for file-based entries — an entry with only `from:` lands at
+the same relative path. All paths are relative to the worktree root.
+
+`template:` also accepts an inline `content:` body, mutually exclusive with
+`from:`. The body uses the same Sprig engine, so an entry without `{{ }}`
+directives is just a static file. `to:` is required when `content:` is set
+(there's no `from:` to default it from):
+
+```yaml
+template:
+  - to: config/database.yml
+    content: |
+      adapter: postgresql
+      database: {{ .Slug }}_dev
+      pool: {{ .Vars.pool | default 5 }}
+```
 
 ### Vars
 

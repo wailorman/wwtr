@@ -429,12 +429,99 @@ symlink:
 	if err == nil {
 		t.Fatal("want error, got nil")
 	}
-	if !strings.Contains(err.Error(), "from is required") {
-		t.Errorf("error should mention from: %v", err)
+	// copy/symlink still report "from is required"; template now reports a
+	// different message because `content:` is also a valid source.
+	if c := strings.Count(err.Error(), "from is required"); c != 2 {
+		t.Errorf("want 2 'from is required' (copy+symlink), got %d in %v", c, err)
 	}
-	// All three sections reported.
-	if c := strings.Count(err.Error(), "from is required"); c != 3 {
-		t.Errorf("want 3 'from is required' errors, got %d in %v", c, err)
+	if !strings.Contains(err.Error(), "from or content is required") {
+		t.Errorf("template error should mention content alternative: %v", err)
+	}
+}
+
+// --- inline content (`content:` field) -----------------------------------
+
+func TestLoad_TemplateInlineContent_OK(t *testing.T) {
+	t.Parallel()
+	cfg := mustLoad(t, `
+version: 1
+template:
+  - to: config/database.yml
+    content: |
+      adapter: postgresql
+      database: {{ .Vars.db }}
+`)
+	if len(cfg.Template) != 1 {
+		t.Fatalf("Template len=%d", len(cfg.Template))
+	}
+	got := cfg.Template[0]
+	if got.To != "config/database.yml" {
+		t.Errorf("To=%q", got.To)
+	}
+	if got.From != "" {
+		t.Errorf("From=%q want empty", got.From)
+	}
+	want := "adapter: postgresql\ndatabase: {{ .Vars.db }}\n"
+	if got.Content != want {
+		t.Errorf("Content=%q want %q", got.Content, want)
+	}
+}
+
+func TestLoad_TemplateFromAndContent_Error(t *testing.T) {
+	t.Parallel()
+	fs := writeConfig(t, cfgPath, `
+version: 1
+template:
+  - from: a.tt
+    to:   a
+    content: inline
+`)
+	_, err := config.Load(fs, cfgPath)
+	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("want mutually-exclusive error, got %v", err)
+	}
+}
+
+func TestLoad_TemplateContentMissingTo_Error(t *testing.T) {
+	t.Parallel()
+	fs := writeConfig(t, cfgPath, `
+version: 1
+template:
+  - content: inline
+`)
+	_, err := config.Load(fs, cfgPath)
+	if err == nil || !strings.Contains(err.Error(), "to is required with content") {
+		t.Fatalf("want to-required error, got %v", err)
+	}
+}
+
+func TestLoad_CopyWithContent_Error(t *testing.T) {
+	t.Parallel()
+	fs := writeConfig(t, cfgPath, `
+version: 1
+copy:
+  - from: a
+    to:   b
+    content: inline
+`)
+	_, err := config.Load(fs, cfgPath)
+	if err == nil || !strings.Contains(err.Error(), "content is not supported on copy") {
+		t.Fatalf("want content-not-supported error, got %v", err)
+	}
+}
+
+func TestLoad_SymlinkWithContent_Error(t *testing.T) {
+	t.Parallel()
+	fs := writeConfig(t, cfgPath, `
+version: 1
+symlink:
+  - from: a
+    to:   b
+    content: inline
+`)
+	_, err := config.Load(fs, cfgPath)
+	if err == nil || !strings.Contains(err.Error(), "content is not supported on symlink") {
+		t.Fatalf("want content-not-supported error, got %v", err)
 	}
 }
 
@@ -747,8 +834,8 @@ template:
 	if !strings.Contains(msg, "mutually exclusive") {
 		t.Errorf("error should mention mutual exclusion: %v", err)
 	}
-	if !strings.Contains(msg, "from is required") {
-		t.Errorf("error should mention from: %v", err)
+	if !strings.Contains(msg, "from or content is required") {
+		t.Errorf("error should mention template from/content: %v", err)
 	}
 }
 
