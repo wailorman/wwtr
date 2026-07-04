@@ -1,0 +1,59 @@
+version: 2
+
+project_name: wwtr
+
+builds:
+  - main: ./
+    binary: wwtr
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{- .Version }}_{{- .Os }}_{{- .Arch }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ .Tag }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+
+brews:
+  - repository:
+      owner: wailorman
+      name: homebrew-tap
+      token: "{{ .Env.GITHUB_TOKEN }}"
+    homepage: https://github.com/wailorman/wwtr
+    description: declarative .wwtr.yml helper for git worktree
+    license: MIT
+    install: |
+      bin.install "wwtr"
+    test: |
+      system "#{bin}/wwtr", "version"
+    caveats: "See https://github.com/wailorman/wwtr for docs."

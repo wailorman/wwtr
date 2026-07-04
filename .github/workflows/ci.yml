@@ -1,0 +1,72 @@
+# CI: test + lint + vuln + coverage gate (PLAN.md §19, §22).
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test + coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache: true
+      - name: go test -race -cover
+        run: |
+          go test -race -coverprofile=cover.out -covermode=atomic ./...
+          go tool cover -func=cover.out | tail -1
+      - name: enforce 95% coverage
+        run: |
+          cov=$(go tool cover -func=cover.out | tail -1 | awk '{print $NF}' | tr -d '%')
+          echo "Total coverage: ${cov}%"
+          if [ "${cov%.*}" -lt 95 ]; then
+            echo "::error::Coverage ${cov}% is below the 95% gate"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cover-out
+          path: cover.out
+          if-no-files-found: error
+          retention-days: 14
+
+  lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache: true
+      - name: install golangci-lint v2
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+      - name: golangci-lint run
+        run: golangci-lint run
+
+  vuln:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache: true
+      - name: install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: govulncheck ./...
+        run: go tool govulncheck ./...
