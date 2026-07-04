@@ -1,8 +1,6 @@
 # wwtr
 
 [![CI](https://github.com/wailorman/wwtr/actions/workflows/ci.yml/badge.svg)](https://github.com/wailorman/wwtr/actions/workflows/ci.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/wailorman/wwtr.svg)](https://pkg.go.dev/github.com/wailorman/wwtr)
-[![Go Report Card](https://goreportcard.com/badge/github.com/wailorman/wwtr)](https://goreportcard.com/report/github.com/wailorman/wwtr)
 
 > **Vibecoded.** This project was built end-to-end with AI assistance. It has
 > tests (95.7% coverage) and lints clean, but treat it as experimental — review
