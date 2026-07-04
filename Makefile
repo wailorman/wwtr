@@ -10,6 +10,9 @@ DATE        ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS     := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 COVER_MIN   := 95
 PKGS        := ./...
+# Packages counted toward the coverage gate. Root main.go and internal/di
+# (OS wrappers exercised only via fakes in app tests) are excluded by policy.
+COVER_PKGS  := $(shell $(GO) list ./... | grep -vE 'github.com/wailorman/wwtr$$|github.com/wailorman/wwtr/internal/di$$')
 
 .PHONY: all build install test test-race test-cover cover lint fmt vuln clean tidy
 
@@ -28,10 +31,10 @@ test-race:
 	$(GO) test -race $(PKGS)
 
 test-cover:
-	$(GO) test -race -coverprofile=cover.out -covermode=atomic $(PKGS)
+	$(GO) test -race -coverprofile=cover.out -covermode=atomic $(COVER_PKGS)
 	@$(GO) tool cover -func=cover.out | tail -1
 	@cov=$$( $(GO) tool cover -func=cover.out | tail -1 | awk '{print $$NF}' | tr -d '%' ); \
-	  if [ $$cov -lt $(COVER_MIN) ]; then \
+	  if [ $${cov%.*} -lt $(COVER_MIN) ]; then \
 	    echo "coverage $$cov% < $(COVER_MIN)% required"; exit 1; \
 	  else echo "coverage $$cov% OK (>= $(COVER_MIN)%)"; fi
 
@@ -48,8 +51,6 @@ fmt:
 	@command -v gofumpt >/dev/null 2>&1 && gofumpt -w . || $(GO) fmt ./...
 
 vuln:
-	@command -v govulncheck >/dev/null 2>&1 || { \
-	  echo "govulncheck not found; install: go install golang.org/x/vuln/cmd/govulncheck@latest"; exit 1; }
 	$(GO) tool govulncheck ./...
 
 tidy:

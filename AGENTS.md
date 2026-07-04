@@ -40,7 +40,12 @@ is the gate for coverage.
    Don't try to unify them; document the split in user-facing docs.
 6. **Tests are first-class.** Every phase ends green on `make test-race` with
    ≥95% coverage on new code. Fakes live in `internal/di/fakes`; integration
-   tests for `app/*` use real `git init` in `t.TempDir()`.
+   tests for `app/*` use real `git init` in `t.TempDir()`. The coverage gate
+   (`make test-cover`, CI `test` job) excludes the root `main.go` and
+   `internal/di` — those are OS wrappers exercised indirectly through fakes
+   in `app`/`cmd` tests; measuring them directly would require a fake `os`
+   and is not worth it. `govulncheck` is pinned via a `tool` directive in
+   `go.mod` and invoked as `go tool govulncheck ./...`.
 
 ## Where things live
 
