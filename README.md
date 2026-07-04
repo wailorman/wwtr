@@ -28,13 +28,6 @@ run `wwtr init` in a fresh worktree, and the right files land in place.
 
 ## Install
 
-**Homebrew:**
-
-```sh
-brew tap wailorman/tap
-brew install wwtr
-```
-
 **Binary** — see [releases](https://github.com/wailorman/wwtr/releases) for
 Linux / macOS / Windows on amd64 + arm64.
 
