@@ -1,0 +1,18 @@
+# Build artifacts
+/bin/
+/cover.out
+*.test
+*.out
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Go workspace files (per-developer)
+/go.work
+/go.work.sum
+
+# Test fixture scratch
+/testdata/scratch/

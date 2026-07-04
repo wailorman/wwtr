@@ -1,0 +1,55 @@
+# golangci-lint v2 config. Docs: https://golangci-lint.run/usage/configuration/
+version: "2"
+
+run:
+  timeout: 5m
+  go: "1.25"
+
+linters:
+  default: standard
+  enable:
+    - errcheck      # check errors are handled
+    - govet         # go vet
+    - staticcheck   # richest Go analyzer
+    - ineffassign   # ineffectual assignments
+    - unused        # unused identifiers
+    - gocyclo       # cyclomatic complexity
+    - gocritic      # idiomatic checks
+    - revive        # golint successor
+    - gocognit      # cognitive complexity
+    - misspell      # spelling
+    - bodyclose     # http.Response.Body close
+    - copyloopvar   # loop var capture (Go 1.22+)
+    - gomodguard_v2  # blocked modules (v2; gomodguard deprecated in v2.12.0)
+    - nolintlint    # proper //nolint directives
+  settings:
+    gocyclo:
+      min-complexity: 15
+    gocognit:
+      min-complexity: 25
+    revive:
+      severity: warning
+      rules:
+        - name: exported
+          disabled: true          # too noisy on trivial wrappers; AGENTS.md discourages what-comments
+        - name: unused-parameter
+          disabled: true          # handled by other linters; allow named-but-unused params in interfaces
+  exclusions:
+    presets:
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - "internal/di/fakes"  # fakes intentionally minimal; no need for full lint
+      - "_test\\.go"
+
+issues:
+  max-same-issues: 0
+  max-issues-per-linter: 0
+
+formatters:
+  enable:
+    - gofumpt
+  exclusions:
+    paths:
+      - "internal/di/fakes"
